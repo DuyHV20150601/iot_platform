@@ -10,4 +10,4 @@ class Common:
 
 
 if __name__ == '__main__':
-    print(Common.load_config('../configs/mqtt_client.yaml'))
+    print(Common.load_config('../configs/mqtt_config.yaml'))

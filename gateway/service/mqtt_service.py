@@ -1,40 +1,44 @@
 from time import sleep
-from multiprocessing import Queue
+import json
 
-from paho.mqtt import publish, subscribe
+from paho.mqtt import publish
 
-# from gateway.model.mqtt_client import MqttClient
-from paho.mqtt.client import Client as MqttClient
+from gateway.model.mqtt_client import MqttClient
+from gateway.service.kafka_service import KafkaService
 from utils.common import Common
-from utils.logger import logger, logging_config
+from utils.logger import Logger
 
 
 class MqttService(object):
-    def __init__(self, client_id):
+    def __init__(self, client_id, log_obj):
+        self.logger = log_obj.logger
         self.client_id = client_id
         self.client = MqttClient(client_id=client_id)
-        self.config = Common.load_config('../../configs/mqtt_client.yaml')
+        self.config = Common.load_config('../../configs/mqtt_config.yaml')
         self.mqtt_configs = self.config['mqtt']
-        self.__host = self.mqtt_configs['host']
-        self.__port = self.mqtt_configs['port']
+        self.__mqtt_host = self.mqtt_configs['host']
+        self.__mqtt_port = self.mqtt_configs['port']
         self.qos = int(self.mqtt_configs['qos'])
-        self.topics = []
-        self.mqtt_queue = Queue()
+        self.mqtt_topics = []
         self.set_callbacks()
+        self.kafka_config = Common.load_config('../../configs/kafka_configs.yaml')['kafka']
+        self.__kafka_host = self.kafka_config['host']
+        self.__kafka_topic = self.kafka_config['topic']
+        self.kafka_service = KafkaService(self.__kafka_host, log_obj=log_obj)
 
     def connect(self, keep_alive=60, bind_address='', reconnect=True, retry_freq=2):
         is_connected = False
 
         try:
-            self.client.connect(host=self.__host,
-                                port=self.__port,
+            self.client.connect(host=self.__mqtt_host,
+                                port=self.__mqtt_port,
                                 keepalive=keep_alive,
                                 bind_address=bind_address)
 
         except ConnectionError as e:
 
             if not reconnect:
-                logger.error('Connection error without reconnecting: %s' % e)
+                self.logger.error('Connection error without reconnecting: %s' % e)
                 raise e
 
             else:
@@ -59,19 +63,20 @@ class MqttService(object):
         if message is not None:
 
             try:
-                self.mqtt_queue.put(message)
+                self.kafka_service.publish(kafka_topic=self.__kafka_topic, msg=message.payload)
 
             except Exception as e:
                 raise e
-        logger.info('Message: %s -> topic: %s: qos: %s from client: %s' %
-                    (message.payload, message.topic, str(message.qos), client))
+        message = json.loads(message.payload)
+        self.logger.info('Message: %s -> topic: %s: qos: %s from client: %s' %
+                         (message, message.topic, str(message.qos), client))
 
     def on_publish(self, client, obj, mid):
-        logger.info('mid: %s' % str(mid))
+        self.logger.info('mid: %s' % str(mid))
 
     def on_subscribe(self, client, obj, mid, granted_qos):
-        logger.info('Subscribed: %s: \tgranted_qos: %s' %
-                    (str(mid), str(granted_qos)))
+        self.logger.info('Subscribed: %s: \tgranted_qos: %s' %
+                         (str(mid), str(granted_qos)))
 
     def set_callbacks(self):
         self.client.on_message = self.on_message
@@ -85,8 +90,8 @@ class MqttService(object):
             self.client.publish(topic=topic, payload=msg, qos=self.qos)
 
         except Exception as e:
-            logger.error('Cannot publish message: %s -> topic: %s \tqos:%s' %
-                         (str(msg), topic, str(self.qos)))
+            self.logger.error('Cannot publish message: %s -> topic: %s \tqos:%s [ERROR: %s]' %
+                              (str(msg), topic, str(self.qos), e))
             raise e
 
     def publish_multiple(self, msgs):
@@ -95,46 +100,45 @@ class MqttService(object):
         # publish.multiple(msgs, hostname="mqtt.eclipse.org")
 
         try:
-            publish.multiple(msgs=msgs, hostname=self.__host,
-                             port=self.__port, client_id=self.client_id)
+            publish.multiple(msgs=msgs, hostname=self.__mqtt_host,
+                             port=self.__mqtt_port, client_id=self.client_id)
 
         except Exception as e:
-            logger.error('Publish message to multiple topics fail: %s' % e)
+            self.logger.error('Publish message to multiple topics fail: %s' % e)
 
     def subscribe(self, topic):
 
         try:
             self.client.subscribe(topic=topic, qos=self.qos)
-            self.topics.append(topic)
+            self.mqtt_topics.append(topic)
 
         except Exception as e:
-            logger.error('Cannot subscribe to topic: %s -> error: %s' % (topic, e))
+            self.logger.error('Cannot subscribe to topic: %s -> error: %s' % (topic, e))
 
     @property
-    def host(self):
-        return self.__host
+    def mqtt_host(self):
+        return self.__mqtt_host
 
-    @host.setter
-    def host(self, value):
-        self.__host = value
+    @mqtt_host.setter
+    def mqtt_host(self, value):
+        self.__mqtt_host = value
 
     @property
-    def port(self):
-        return self.__port
+    def mqtt_port(self):
+        return self.__mqtt_port
 
-    @port.setter
-    def port(self, value):
-        self.__port = value
+    @mqtt_port.setter
+    def mqtt_port(self, value):
+        self.__mqtt_port = value
 
 
 if __name__ == "__main__":
-    logging_config(__name__)
-    mqtt_service = MqttService('test')
+    mqtt_service = MqttService('test', Logger(__name__))
     mqtt_service.connect()
-    mqtt_service.client.loop_start()
-    print('asdasdas')
     mqtt_service.publish_single('mqtt/status', 'test222')
-    # print(mqtt_service.mqtt_queue.get())
+
+    for i in range(10):
+        mqtt_service.publish_single('mqtt/status', str(i))
     mqtt_service.subscribe('mqtt/status')
-    # mqtt_service.client.loop_forever()
-    print(mqtt_service.mqtt_queue.get())
+    mqtt_service.client.loop_forever()
+

@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 def logging_config(file_name):
     if not os.path.exists('logs'):
         os.mkdir('logs')
-    base = os.path.join('logs', file_name + '_' + time.strftime('%Y%m%d_%H%M%S'))
+    base = os.path.join('logs', file_name)
     log_filename = base + '.log'
     log_running = file_name + '_running.log'
     c_handler = logging.StreamHandler()
@@ -40,3 +40,9 @@ def logging_config(file_name):
     # Redirect the system exception to log - error
     sys.stderr = open(base + '_exception.log', 'w')
     sys.stdout = open(base + '_info.log', 'w')
+
+
+class Logger(object):
+    def __init__(self, file_name):
+        logging_config(file_name=file_name)
+        self.logger = logging.getLogger(__name__)
