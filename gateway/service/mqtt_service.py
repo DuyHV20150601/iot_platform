@@ -68,7 +68,7 @@ class MqttService(object):
 
     def on_connect(self, client, userdata, flags, rc):
         # logger.info('connected rc: %s' % str(rc))
-        pass
+        self.subscribe()
 
     def on_message(self, client, obj, message):
 
@@ -78,6 +78,7 @@ class MqttService(object):
                 self.kafka_service.publish(kafka_topic=self.__kafka_topic, msg=message.payload)
 
             except Exception as e:
+                self.logger.error('[ERROR: %s]' % e)
                 raise e
         message = json.loads(message.payload)
         self.logger.info('Message: %s -> topic: %s: qos: %s from client: %s' %
@@ -146,7 +147,7 @@ class MqttService(object):
 
 if __name__ == "__main__":
     kafka = KafkaService('localhost:9092', Logger(__name__))
-    # kafka.delete_topic(['test'])
+    # kafka.delete_topic(['iot_platform'])
     # kafka.create_topic(['iot_platform'])
     mqtt_service = MqttService('test_client', Logger(__name__))
     mqtt_service.connect()
@@ -158,5 +159,5 @@ if __name__ == "__main__":
             'temperature': i
         }
         mqtt_service.publish_single(str(message_tpl))
-    mqtt_service.subscribe()
+    mqtt_service.connect()
     mqtt_service.client.loop_forever()
