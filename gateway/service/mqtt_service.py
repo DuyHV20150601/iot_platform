@@ -13,7 +13,7 @@ class MqttService(object):
     def __init__(self, client_id):
         self.client_id = client_id
         self.client = MqttClient(client_id=client_id)
-        self.config = Common.load_config('../../configs/mqtt_client.yaml')
+        self.config = Common.load_config('configs/mqtt_config.yaml')
         self.mqtt_configs = self.config['mqtt']
         self.__host = self.mqtt_configs['host']
         self.__port = self.mqtt_configs['port']
@@ -133,7 +133,8 @@ if __name__ == "__main__":
     mqtt_service.connect()
     mqtt_service.client.loop_start()
     print('asdasdas')
-    mqtt_service.publish_single('mqtt/status', 'test222')
+    for i in range(10):
+        mqtt_service.publish_single('iot_platform', str(i))
     # print(mqtt_service.mqtt_queue.get())
     mqtt_service.subscribe('mqtt/status')
     # mqtt_service.client.loop_forever()
