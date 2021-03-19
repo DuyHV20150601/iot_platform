@@ -1,5 +1,5 @@
 Django==3.0.4
-djangorestframework==3.11.0
+djangorestframework==3.11.2
 luigi==2.8.12
 PyYAML==5.3.1
 tensorflow==2.1.0
